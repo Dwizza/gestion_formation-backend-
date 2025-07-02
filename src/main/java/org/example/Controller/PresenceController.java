@@ -8,6 +8,7 @@ import org.example.Model.Presence;
 import org.example.Repository.ApprenantRepository;
 import org.example.Repository.GroupeRepository;
 import org.example.Repository.PresenceRepository;
+import org.example.Service.NotificationService;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -31,6 +32,7 @@ public class PresenceController {
     private final PresenceRepository presenceRepository;
     private final ApprenantRepository apprenantRepository;
     private final GroupeRepository groupeRepository;
+    private final NotificationService notificationService;
 
     @GetMapping
     public List<PresenceDTO> getAll() {
@@ -156,58 +158,23 @@ public class PresenceController {
     }
 
     @PostMapping
-    public ResponseEntity<PresenceDTO> create(@RequestBody PresenceDTO dto) {
-        Optional<Apprenant> apprenantOpt = apprenantRepository.findById(dto.getApprenantId());
-        Optional<Groupe> groupeOpt = groupeRepository.findById(dto.getGroupeId());
-
-        if (apprenantOpt.isEmpty() || groupeOpt.isEmpty()) {
-            return ResponseEntity.badRequest().build();
-        }
-
-        Presence presence = new Presence();
-        presence.setApprenant(apprenantOpt.get());
-        presence.setGroupe(groupeOpt.get());
-        presence.setDate(dto.getDate());
-        presence.setStatut(dto.getStatut());
-
-        Presence saved = presenceRepository.save(presence);
-        return ResponseEntity.status(HttpStatus.CREATED).body(convertToDTO(saved));
-    }
-
-    @PutMapping("/{id}")
-    public ResponseEntity<PresenceDTO> update(@PathVariable Long id, @RequestBody PresenceDTO dto) {
-        Optional<Presence> presenceOpt = presenceRepository.findById(id);
-        Optional<Apprenant> apprenantOpt = apprenantRepository.findById(dto.getApprenantId());
-        Optional<Groupe> groupeOpt = groupeRepository.findById(dto.getGroupeId());
-
-        if (presenceOpt.isEmpty() || apprenantOpt.isEmpty() || groupeOpt.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        Presence presence = presenceOpt.get();
-        presence.setApprenant(apprenantOpt.get());
-        presence.setGroupe(groupeOpt.get());
-        presence.setDate(dto.getDate());
-        presence.setStatut(dto.getStatut());
-
-        Presence updated = presenceRepository.save(presence);
-        return ResponseEntity.ok(convertToDTO(updated));
-    }
-
-    @PostMapping("/bulk")
-    public ResponseEntity<?> createBulk(@RequestBody List<PresenceDTO> presenceDTOs) {
-        List<Presence> presencesToSave = new ArrayList<>();
-
-        for (PresenceDTO dto : presenceDTOs) {
-            if (dto.getApprenantId() == null || dto.getGroupeId() == null || dto.getDate() == null) {
-                return ResponseEntity.badRequest().body("Apprenant ID, Groupe ID, and Date must not be null.");
-            }
+    public ResponseEntity<?> create(@RequestBody PresenceDTO dto) {
+        try {
+            System.out.println("DEBUG: Création d'une présence pour l'apprenant ID: " + dto.getApprenantId() +
+                    ", groupe ID: " + dto.getGroupeId() +
+                    ", statut: " + dto.getStatut());
 
             Optional<Apprenant> apprenantOpt = apprenantRepository.findById(dto.getApprenantId());
             Optional<Groupe> groupeOpt = groupeRepository.findById(dto.getGroupeId());
 
-            if (apprenantOpt.isEmpty() || groupeOpt.isEmpty()) {
-                return ResponseEntity.badRequest().body("Invalid Apprenant or Groupe ID.");
+            if (apprenantOpt.isEmpty()) {
+                System.out.println("ERREUR: Apprenant non trouvé avec ID " + dto.getApprenantId());
+                return ResponseEntity.badRequest().body("Apprenant non trouvé avec ID " + dto.getApprenantId());
+            }
+
+            if (groupeOpt.isEmpty()) {
+                System.out.println("ERREUR: Groupe non trouvé avec ID " + dto.getGroupeId());
+                return ResponseEntity.badRequest().body("Groupe non trouvé avec ID " + dto.getGroupeId());
             }
 
             Presence presence = new Presence();
@@ -216,11 +183,146 @@ public class PresenceController {
             presence.setDate(dto.getDate());
             presence.setStatut(dto.getStatut());
 
-            presencesToSave.add(presence);
-        }
+            System.out.println("DEBUG: Sauvegarde de la présence dans la base de données");
+            Presence saved = presenceRepository.save(presence);
 
-        presenceRepository.saveAll(presencesToSave);
-        return ResponseEntity.ok("Presences saved successfully.");
+            // Créer une notification si l'apprenant est absent
+            if ("ABSENT".equals(saved.getStatut())) {
+                System.out.println("DEBUG: Création d'une notification pour absence");
+                try {
+                    notificationService.createAbsenceNotification(saved);
+                    System.out.println("DEBUG: Notification créée avec succès");
+                } catch (Exception e) {
+                    System.err.println("ERREUR lors de la création de la notification d'absence: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+
+            System.out.println("DEBUG: Présence enregistrée avec succès, ID: " + saved.getId());
+            return ResponseEntity.status(HttpStatus.CREATED).body(convertToDTO(saved));
+        } catch (Exception e) {
+            System.err.println("ERREUR lors de la création de la présence: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Une erreur est survenue: " + e.getMessage());
+        }
+    }
+
+    @PutMapping("/{id}")
+    public ResponseEntity<?> update(@PathVariable Long id, @RequestBody PresenceDTO dto) {
+        try {
+            System.out.println("DEBUG: Mise à jour de la présence ID: " + id +
+                    ", statut: " + dto.getStatut());
+
+            Optional<Presence> presenceOpt = presenceRepository.findById(id);
+
+            if (presenceOpt.isEmpty()) {
+                System.out.println("ERREUR: Présence non trouvée avec ID " + id);
+                return ResponseEntity.notFound().build();
+            }
+
+            Optional<Apprenant> apprenantOpt = apprenantRepository.findById(dto.getApprenantId());
+            Optional<Groupe> groupeOpt = groupeRepository.findById(dto.getGroupeId());
+
+            if (apprenantOpt.isEmpty() || groupeOpt.isEmpty()) {
+                System.out.println("ERREUR: Apprenant ou Groupe non trouvé");
+                return ResponseEntity.badRequest().body("Apprenant ou Groupe non trouvé");
+            }
+
+            Presence presence = presenceOpt.get();
+            String ancienStatut = presence.getStatut();
+
+            presence.setApprenant(apprenantOpt.get());
+            presence.setGroupe(groupeOpt.get());
+            presence.setDate(dto.getDate());
+            presence.setStatut(dto.getStatut());
+
+            System.out.println("DEBUG: Sauvegarde des modifications dans la base de données");
+            Presence updated = presenceRepository.save(presence);
+
+            // Créer une notification si le statut passe à "ABSENT"
+            if (!"ABSENT".equals(ancienStatut) && "ABSENT".equals(updated.getStatut())) {
+                System.out.println("DEBUG: Création d'une notification pour changement de statut vers ABSENT");
+                try {
+                    notificationService.createAbsenceNotification(updated);
+                    System.out.println("DEBUG: Notification créée avec succès");
+                } catch (Exception e) {
+                    System.err.println("ERREUR lors de la création de la notification d'absence: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }
+
+            System.out.println("DEBUG: Présence mise à jour avec succès");
+            return ResponseEntity.ok(convertToDTO(updated));
+        } catch (Exception e) {
+            System.err.println("ERREUR lors de la mise à jour de la présence: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Une erreur est survenue: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/bulk")
+    public ResponseEntity<?> createBulk(@RequestBody List<PresenceDTO> presenceDTOs) {
+        try {
+            System.out.println("DEBUG: Création en masse de " + presenceDTOs.size() + " présences");
+
+            List<Presence> presencesToSave = new ArrayList<>();
+            List<String> errors = new ArrayList<>();
+
+            for (PresenceDTO dto : presenceDTOs) {
+                if (dto.getApprenantId() == null || dto.getGroupeId() == null || dto.getDate() == null) {
+                    errors.add("Apprenant ID, Groupe ID, et Date ne doivent pas être null.");
+                    continue;
+                }
+
+                Optional<Apprenant> apprenantOpt = apprenantRepository.findById(dto.getApprenantId());
+                Optional<Groupe> groupeOpt = groupeRepository.findById(dto.getGroupeId());
+
+                if (apprenantOpt.isEmpty() || groupeOpt.isEmpty()) {
+                    errors.add("ID Apprenant ou Groupe invalide: " + dto.getApprenantId() + " / " + dto.getGroupeId());
+                    continue;
+                }
+
+                Presence presence = new Presence();
+                presence.setApprenant(apprenantOpt.get());
+                presence.setGroupe(groupeOpt.get());
+                presence.setDate(dto.getDate());
+                presence.setStatut(dto.getStatut());
+
+                presencesToSave.add(presence);
+                System.out.println("DEBUG: Préparation de la présence pour l'apprenant " +
+                        apprenantOpt.get().getNom() + " avec statut " + dto.getStatut());
+            }
+
+            if (!errors.isEmpty()) {
+                System.out.println("ERREUR: Des erreurs sont survenues lors de la création en masse: " + errors);
+                return ResponseEntity.badRequest().body(errors);
+            }
+
+            System.out.println("DEBUG: Sauvegarde de " + presencesToSave.size() + " présences dans la base de données");
+            List<Presence> savedPresences = presenceRepository.saveAll(presencesToSave);
+
+            // Créer des notifications pour les absents
+            int notificationsCreated = 0;
+            for (Presence absence : savedPresences) {
+                if ("ABSENT".equals(absence.getStatut())) {
+                    try {
+                        notificationService.createAbsenceNotification(absence);
+                        notificationsCreated++;
+                    } catch (Exception e) {
+                        System.err.println("ERREUR lors de la création de la notification d'absence: " + e.getMessage());
+                    }
+                }
+            }
+
+            System.out.println("DEBUG: " + savedPresences.size() + " présences enregistrées avec succès. " +
+                    notificationsCreated + " notifications créées.");
+            return ResponseEntity.ok("Présences enregistrées avec succès: " + savedPresences.size() +
+                    ", Notifications créées: " + notificationsCreated);
+        } catch (Exception e) {
+            System.err.println("ERREUR lors de la création en masse des présences: " + e.getMessage());
+            e.printStackTrace();
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Une erreur est survenue: " + e.getMessage());
+        }
     }
 
     @DeleteMapping("/{id}")
