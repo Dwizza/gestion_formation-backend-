@@ -119,7 +119,7 @@ public class NotificationService {
                 presence.getDate().toString() + " for group " + presence.getGroupe().getName());
         notification.setDateCreation(LocalDateTime.now());
         notification.setLu(false);
-        notification.setType("ABSENCE");
+        notification.setType("ATTENDANCE");
         notification.setUrgente(true);
         notification.setApprenant(apprenant);
 
@@ -154,7 +154,7 @@ public class NotificationService {
 
         notification.setDateCreation(LocalDateTime.now());
         notification.setLu(false);
-        notification.setType("PAIEMENT");
+        notification.setType("PAYMENT");
         notification.setUrgente(urgente);
         notification.setApprenant(apprenant);
 
@@ -166,7 +166,7 @@ public class NotificationService {
      * @param learnerId ID of the learner
      * @param title Title of the notification
      * @param message Message of the notification
-     * @param type Notification type (ABSENCE, PAYMENT, INFORMATION, etc.)
+     * @param type Notification type (ATTENDANCE, PAYMENT, INFORMATION, etc.)
      * @return The created notification or null if the learner is not found
      */
     @Transactional
@@ -193,7 +193,7 @@ public class NotificationService {
      * Creates a notification for all learners
      * @param title Title of the notification
      * @param message Message of the notification
-     * @param type Notification type (ABSENCE, PAYMENT, INFORMATION, etc.)
+     * @param type Notification type (ATTENDANCE, PAYMENT, INFORMATION, etc.)
      * @param urgent If the notification is urgent
      * @return The number of created notifications
      */
@@ -249,7 +249,7 @@ public class NotificationService {
         notification.setMessage("A reminder for your overdue payment. Please regularize your situation as soon as possible.");
         notification.setDateCreation(LocalDateTime.now());
         notification.setLu(false);
-        notification.setType("PAIEMENT");
+        notification.setType("PAYMENT");
         notification.setUrgente(true);
         notification.setApprenant(optApprenant.get());
 

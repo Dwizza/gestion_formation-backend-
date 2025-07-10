@@ -156,7 +156,9 @@ public class PaiementController {
         dto.setId(paiement.getId());
         dto.setMontant(paiement.getMontant());
         dto.setDate(paiement.getDate());
-        dto.setStatut(paiement.getStatut().name());
+        if (paiement.getStatut() != null) {
+            dto.setStatut(paiement.getStatut().name());
+        }
 
         if (paiement.getApprenant() != null) {
             dto.setApprenantId(paiement.getApprenant().getId());

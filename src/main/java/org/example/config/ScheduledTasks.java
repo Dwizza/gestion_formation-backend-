@@ -71,8 +71,7 @@ public class ScheduledTasks {
     @Scheduled(cron = "0 0 16 * * ?")
     public void checkUnnotifiedAbsences() {
         System.out.println("Executing check for unnotified absences");
-        // Code to check for unnotified absences
-        // To be implemented according to your needs
+
     }
 
     /**
