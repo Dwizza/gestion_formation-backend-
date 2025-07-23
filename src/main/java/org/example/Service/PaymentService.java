@@ -43,6 +43,14 @@ public class PaymentService {
         return new UnpaidPaymentsReportDTO(totalUnpaidAmount, numberOfUnpaidLearners, averageOverdueMonths, unpaidPaymentsDTO);
     }
 
+    public PaiementDTO markAsPaid(Long paymentId) {
+        Paiement paiement = paiementRepository.findById(paymentId)
+                .orElseThrow(() -> new RuntimeException("Payment not found with id: " + paymentId));
+        paiement.setStatut(StatutPaiement.PAID);
+        Paiement updatedPaiement = paiementRepository.save(paiement);
+        return convertToDTO(updatedPaiement);
+    }
+
     private PaiementDTO convertToDTO(Paiement paiement) {
         PaiementDTO paiementDTO = new PaiementDTO();
         paiementDTO.setId(paiement.getId());

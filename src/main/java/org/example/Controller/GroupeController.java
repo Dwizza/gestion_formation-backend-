@@ -3,16 +3,20 @@ package org.example.Controller;
 import org.example.Model.Formation;
 import org.example.Model.Groupe;
 import org.example.Model.Formateur;
+import org.example.Model.Session;
 import org.example.Repository.FormationRepository;
 import org.example.Repository.GroupeRepository;
 import org.example.Repository.FormateurRepository;
+import org.example.Repository.SessionRepository;
 import org.example.DTO.GroupeDTO;
+import org.example.DTO.GroupeEmploiDailyDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
@@ -29,6 +33,9 @@ public class GroupeController {
     @Autowired
     private FormateurRepository formateurRepository;
 
+    @Autowired
+    private SessionRepository sessionRepository;
+
     // GET all groups
     @GetMapping
     public ResponseEntity<List<GroupeDTO>> getAllGroupes() {
@@ -36,6 +43,19 @@ public class GroupeController {
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());
         return ResponseEntity.ok(dtos);
+    }
+    // GET all groups with their daily schedule
+    @GetMapping("/emploi-daily")
+    public ResponseEntity<List<GroupeEmploiDailyDTO>> getAllGroupesWithEmploiDaily() {
+        List<GroupeEmploiDailyDTO> result = groupeRepository.findAll().stream()
+                .map(groupe -> {
+                    List<Session> sessions = sessionRepository.findByGroupeId(groupe.getId());
+                    Map<java.time.LocalDate, List<Session>> emploiDuTempsDaily = sessions.stream()
+                            .collect(Collectors.groupingBy(Session::getDate));
+                    return new GroupeEmploiDailyDTO(groupe, emploiDuTempsDaily);
+                })
+                .collect(Collectors.toList());
+        return ResponseEntity.ok(result);
     }
 
     // GET by id
@@ -128,6 +148,8 @@ public class GroupeController {
 
         return ResponseEntity.ok(dtos);
     }
+
+
 
     // Convert entity ➔ DTO
     private GroupeDTO convertToDTO(Groupe g) {
