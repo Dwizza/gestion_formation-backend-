@@ -30,6 +30,12 @@ public class Session {
     @JsonFormat(pattern = "HH:mm")
     private LocalTime endTime;
 
+
+    @ElementCollection
+    @CollectionTable(name = "session_days", joinColumns = @JoinColumn(name = "session_id"))
+    @Column(name = "day")
+    private List<String> days = new ArrayList<>(); // Ex: ["LUNDI", "MERCREDI", "VENDREDI"]
+
     private String status; // PLANNED, COMPLETED, CANCELLED
 
     @ManyToOne(fetch = FetchType.EAGER)
